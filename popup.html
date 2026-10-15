@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="dust" id="dust"></div>
+
+  <div class="app">
+    <!-- Профиль: аватарка мозаикой -->
+    <section class="px profile">
+      <canvas id="avatar"></canvas>
+      <span id="chip" class="chip">ожидание</span>
+      <div class="profile-name" id="name">Steam</div>
+    </section>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="run">Запуск</button>
+      <button class="tab" data-tab="settings">Настройки</button>
+      <button class="tab" data-tab="log">Лог</button>
+    </nav>
+
+    <!-- ЗАПУСК -->
+    <div class="view" data-view="run">
+      <section class="px progress">
+        <div class="ring-wrap">
+          <svg id="ring" viewBox="0 0 100 100"></svg>
+          <div class="ring-center">
+            <div id="ringNum" class="dots dots-sm"></div>
+            <div id="ringLabel" class="ring-label">ПОСТОВ</div>
+          </div>
+        </div>
+        <div class="progress-info">
+          <div class="bullet-title"><i></i><span id="statusText">Ожидание</span></div>
+          <div class="big"><span id="bigNum">0</span><small id="bigSub">/ 200 постов</small></div>
+          <div id="message" class="muted"></div>
+          <div class="cmt-line"><span class="muted">Коммент:</span><span id="cmtPreview" class="emo-preview inline"></span></div>
+          <button id="clearCooldown" class="linkbtn hidden">сбросить кулдаун</button>
+        </div>
+      </section>
+
+      <section class="px block">
+        <div class="bullet-title"><i></i>Статистика</div>
+        <div class="cards">
+          <div class="px card"><div id="dLiked" class="dots"></div><b>Лайков</b></div>
+          <div class="px card"><div id="dCommented" class="dots"></div><b>Комментов</b></div>
+          <div class="px card"><div id="dSkipped" class="dots"></div><b>Пропущено</b></div>
+        </div>
+      </section>
+
+      <div class="actions">
+        <button id="start" class="px btn primary">Старт</button>
+        <button id="stop" class="px btn">Стоп</button>
+      </div>
+    </div>
+
+    <!-- НАСТРОЙКИ -->
+    <div class="view hidden" data-view="settings">
+      <form id="settings" class="px block">
+        <div class="bullet-title"><i></i>Действия</div>
+        <label class="check"><input type="checkbox" name="doLike"><span class="box"></span>Лайкать посты</label>
+        <label class="check"><input type="checkbox" name="doComment"><span class="box"></span>Оставлять комментарий</label>
+        <div class="bullet-title"><i></i>Пул смайликов <span id="poolCount" class="count"></span></div>
+        <div id="poolPreview" class="emo-preview pool" title="Клик по смайлику — убрать из пула"></div>
+        <div class="emo-row">
+          <label class="field grow">Смайликов в одном комменте
+            <input name="perComment" type="number" min="1" max="5">
+          </label>
+          <button type="button" id="loadEmoticons" class="px btn small">Мои смайлики</button>
+        </div>
+        <div id="emoTools" class="emo-row hidden">
+          <input id="emoSearch" type="text" placeholder="Поиск…">
+          <input id="manualEmo" type="text" class="mono" placeholder=":название:">
+          <button type="button" id="manualAdd" class="px btn small">+</button>
+        </div>
+        <div id="emoPicker" class="emo-picker hidden"></div>
+
+        <div class="bullet-title"><i></i>Скорость</div>
+        <div class="row">
+          <label class="field">После лайка, мс<input name="likeDelay" type="number" min="500" step="100"></label>
+          <label class="field">После коммента, мс<input name="commentDelay" type="number" min="1000" step="100"></label>
+        </div>
+        <div class="row">
+          <label class="field">Макс. постов<input name="maxPosts" type="number" min="1"></label>
+          <label class="field">Макс. скроллов<input name="maxScrolls" type="number" min="0"></label>
+        </div>
+
+        <div class="bullet-title"><i></i>Антиспам Steam</div>
+        <label class="field">Когда Steam дал лимит
+          <select name="onLimit">
+            <option value="stop">Остановить всё</option>
+            <option value="likesOnly">Продолжать только лайки</option>
+          </select>
+        </label>
+        <label class="field">Кулдаун после лимита, мин<input name="cooldownMin" type="number" min="1"></label>
+
+        <div class="actions">
+          <button type="submit" class="px btn primary">Сохранить</button>
+          <button type="button" id="clearHistory" class="px btn">Очистить историю</button>
+        </div>
+        <div id="formMsg" class="muted"></div>
+      </form>
+    </div>
+
+    <!-- ЛОГ -->
+    <div class="view hidden" data-view="log">
+      <section class="px block">
+        <div class="bullet-title"><i></i>Лог</div>
+        <pre id="log" class="log"></pre>
+      </section>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

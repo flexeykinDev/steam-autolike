@@ -1,0 +1,6 @@
+*.xpi
+*.zip
+node_modules/
+web-ext-artifacts/
+.DS_Store
+__pycache__/
