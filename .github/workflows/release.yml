@@ -1,9 +1,11 @@
 name: Release
 
-# Push a tag like v2.0.0 → tests, lint, build, (optional) AMO signing, GitHub Release with the .xpi.
+# Push a tag like v2.0.0 — or press "Run workflow" (the tag v<manifest version> is created for you) —
+# → tests, lint, build, optional AMO signing, GitHub Release with the .xpi.
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -24,10 +26,14 @@ jobs:
       - run: npm test
       - run: npm run lint
 
-      - name: Check that the tag matches manifest.json
+      - name: Work out the tag
         run: |
           v=$(node -p "require('./manifest.json').version")
-          [ "v$v" = "$GITHUB_REF_NAME" ] || { echo "Tag $GITHUB_REF_NAME != manifest version $v"; exit 1; }
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            [ "v$v" = "$GITHUB_REF_NAME" ] || { echo "Tag $GITHUB_REF_NAME != manifest version $v"; exit 1; }
+          fi
+          echo "TAG=v$v" >> "$GITHUB_ENV"
+          echo "VERSION=$v" >> "$GITHUB_ENV"
 
       - name: Build unsigned .xpi
         run: npm run build
@@ -40,15 +46,19 @@ jobs:
         run: |
           npx web-ext sign --source-dir . --channel unlisted --artifacts-dir dist-signed \
             --api-key "$AMO_JWT_ISSUER" --api-secret "$AMO_JWT_SECRET" --approval-timeout 900000
-          for f in dist-signed/*.xpi; do mv "$f" "dist/steam-autolike-${GITHUB_REF_NAME#v}-signed.xpi"; done
+          for f in dist-signed/*.xpi; do mv "$f" "dist/steam-autolike-${VERSION}-signed.xpi"; done
 
       - name: Release notes from CHANGELOG.md
         run: |
-          v="${GITHUB_REF_NAME#v}"
-          awk -v v="$v" '$0 ~ "^## \\[?"v"\\]?" {on=1; next} /^## / && on {exit} on' CHANGELOG.md > notes.md
-          [ -s notes.md ] || echo "Steam Autolike $GITHUB_REF_NAME" > notes.md
+          awk -v v="$VERSION" '$0 ~ "^## \\[?"v"\\]?" {on=1; next} /^## / && on {exit} on' CHANGELOG.md > notes.md
+          [ -s notes.md ] || echo "Steam Autolike $TAG" > notes.md
 
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/*.xpi --title "Steam Autolike $GITHUB_REF_NAME" --notes-file notes.md
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/*.xpi --clobber
+          else
+            gh release create "$TAG" dist/*.xpi --target "$GITHUB_SHA" --title "Steam Autolike $TAG" --notes-file notes.md
+          fi
