@@ -1,0 +1,6 @@
+{
+  "extName": { "message": "Steam Autolike" },
+  "extDescription": { "message": "Likes your friends' posts in the Steam activity feed and leaves one emoticon comment per post — never twice, with daily limits and respect for Steam's anti-spam." },
+  "cmdToggle": { "message": "Start / stop on the current Steam tab" },
+  "actionTitle": { "message": "Steam Autolike" }
+}

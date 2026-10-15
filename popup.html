@@ -1,117 +1,230 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Steam Autolike</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
   <div class="dust" id="dust"></div>
 
   <div class="app">
-    <!-- Профиль: аватарка мозаикой -->
+    <!-- Profile: avatar as a mosaic -->
     <section class="px profile">
       <canvas id="avatar"></canvas>
-      <span id="chip" class="chip">ожидание</span>
+      <span id="chip" class="chip" data-i18n="chipIdle"></span>
       <div class="profile-name" id="name">Steam</div>
     </section>
 
     <nav class="tabs">
-      <button class="tab active" data-tab="run">Запуск</button>
-      <button class="tab" data-tab="settings">Настройки</button>
-      <button class="tab" data-tab="log">Лог</button>
+      <button class="tab active" data-tab="run" data-i18n="tabRun"></button>
+      <button class="tab" data-tab="friends" data-i18n="tabFriends"></button>
+      <button class="tab" data-tab="settings" data-i18n="tabSettings"></button>
+      <button class="tab" data-tab="stats" data-i18n="tabStats"></button>
+      <button class="tab" data-tab="log" data-i18n="tabLog"></button>
     </nav>
 
-    <!-- ЗАПУСК -->
+    <!-- ================= RUN ================= -->
     <div class="view" data-view="run">
       <section class="px progress">
         <div class="ring-wrap">
           <svg id="ring" viewBox="0 0 100 100"></svg>
           <div class="ring-center">
             <div id="ringNum" class="dots dots-sm"></div>
-            <div id="ringLabel" class="ring-label">ПОСТОВ</div>
+            <div id="ringLabel" class="ring-label"></div>
           </div>
         </div>
         <div class="progress-info">
-          <div class="bullet-title"><i></i><span id="statusText">Ожидание</span></div>
-          <div class="big"><span id="bigNum">0</span><small id="bigSub">/ 200 постов</small></div>
+          <div class="bullet-title"><i></i><span id="statusText"></span></div>
+          <div class="big"><span id="bigNum">0</span><small id="bigSub"></small></div>
           <div id="message" class="muted"></div>
-          <div class="cmt-line"><span class="muted">Коммент:</span><span id="cmtPreview" class="emo-preview inline"></span></div>
-          <button id="clearCooldown" class="linkbtn hidden">сбросить кулдаун</button>
+          <div class="cmt-line"><span class="muted" data-i18n="commentLabel"></span><span id="cmtPreview" class="emo-preview inline"></span></div>
+          <button id="clearCooldown" class="linkbtn hidden" data-i18n="resetCooldown"></button>
         </div>
       </section>
 
+      <section class="px block tight">
+        <label class="check"><input type="checkbox" id="quickDry"><span class="box"></span>
+          <span><b data-i18n="dryRun"></b> <span class="muted" data-i18n="dryRunHint"></span></span></label>
+        <label class="check"><input type="checkbox" id="quickOnlyNew"><span class="box"></span>
+          <span><b data-i18n="onlyNew"></b> <span class="muted" data-i18n="onlyNewHint"></span></span></label>
+        <div id="todayLine" class="today muted"></div>
+      </section>
+
       <section class="px block">
-        <div class="bullet-title"><i></i>Статистика</div>
+        <div class="bullet-title"><i></i><span data-i18n="statsTitle"></span></div>
         <div class="cards">
-          <div class="px card"><div id="dLiked" class="dots"></div><b>Лайков</b></div>
-          <div class="px card"><div id="dCommented" class="dots"></div><b>Комментов</b></div>
-          <div class="px card"><div id="dSkipped" class="dots"></div><b>Пропущено</b></div>
+          <div class="px card"><div id="dLiked" class="dots"></div><b data-i18n="cardLikes"></b></div>
+          <div class="px card"><div id="dCommented" class="dots"></div><b data-i18n="cardComments"></b></div>
+          <div class="px card"><div id="dSkipped" class="dots"></div><b data-i18n="cardSkipped"></b></div>
         </div>
       </section>
 
       <div class="actions">
-        <button id="start" class="px btn primary">Старт</button>
-        <button id="stop" class="px btn">Стоп</button>
+        <button id="start" class="px btn primary" data-i18n="start"></button>
+        <button id="stop" class="px btn" data-i18n="stop"></button>
       </div>
+      <div id="hotkey" class="hint muted"></div>
     </div>
 
-    <!-- НАСТРОЙКИ -->
+    <!-- ================= FRIENDS ================= -->
+    <div class="view hidden" data-view="friends">
+      <section class="px block">
+        <div class="bullet-title"><i></i><span data-i18n="whose"></span></div>
+        <div class="seg" id="friendMode">
+          <button type="button" data-mode="all" data-i18n="modeAll"></button>
+          <button type="button" data-mode="only" data-i18n="modeOnly"></button>
+          <button type="button" data-mode="except" data-i18n="modeExcept"></button>
+        </div>
+
+        <div class="bullet-title sub"><i></i><span data-i18n="listTitle"></span><span id="listCount" class="count"></span></div>
+        <div id="friendList" class="chips"></div>
+        <div class="emo-row">
+          <input id="friendInput" type="text" data-i18n-ph="addPh">
+          <button type="button" id="friendAdd" class="px btn small" data-i18n="add"></button>
+        </div>
+        <div id="friendMsg" class="muted"></div>
+
+        <div class="bullet-title sub"><i></i><span data-i18n="fromFeed"></span>
+          <button type="button" id="feedRefresh" class="linkbtn count" data-i18n="refresh"></button></div>
+        <div id="feedAuthors" class="chips"></div>
+      </section>
+
+      <section class="px block">
+        <div class="bullet-title"><i></i><span data-i18n="postTypes"></span></div>
+        <table class="types">
+          <thead><tr><th></th><th data-i18n="colLike"></th><th data-i18n="colComment"></th></tr></thead>
+          <tbody id="typesBody"></tbody>
+        </table>
+      </section>
+    </div>
+
+    <!-- ================= SETTINGS ================= -->
     <div class="view hidden" data-view="settings">
       <form id="settings" class="px block">
-        <div class="bullet-title"><i></i>Действия</div>
-        <label class="check"><input type="checkbox" name="doLike"><span class="box"></span>Лайкать посты</label>
-        <label class="check"><input type="checkbox" name="doComment"><span class="box"></span>Оставлять комментарий</label>
-        <div class="bullet-title"><i></i>Пул смайликов <span id="poolCount" class="count"></span></div>
-        <div id="poolPreview" class="emo-preview pool" title="Клик по смайлику — убрать из пула"></div>
+        <div class="bullet-title"><i></i><span data-i18n="secActions"></span></div>
+        <label class="check"><input type="checkbox" name="doLike"><span class="box"></span><span data-i18n="likePosts"></span></label>
+        <label class="check"><input type="checkbox" name="doComment"><span class="box"></span><span data-i18n="leaveComment"></span></label>
+
+        <div class="bullet-title"><i></i><span data-i18n="poolTitle"></span><span id="poolCount" class="count"></span></div>
+        <div id="poolPreview" class="emo-preview pool"></div>
         <div class="emo-row">
-          <label class="field grow">Смайликов в одном комменте
+          <label class="field grow"><span data-i18n="perComment"></span>
             <input name="perComment" type="number" min="1" max="5">
           </label>
-          <button type="button" id="loadEmoticons" class="px btn small">Мои смайлики</button>
+          <button type="button" id="loadEmoticons" class="px btn small" data-i18n="myEmoticons"></button>
         </div>
         <div id="emoTools" class="emo-row hidden">
-          <input id="emoSearch" type="text" placeholder="Поиск…">
-          <input id="manualEmo" type="text" class="mono" placeholder=":название:">
+          <input id="emoSearch" type="text" data-i18n-ph="searchPh">
+          <input id="manualEmo" type="text" class="mono" data-i18n-ph="namePh">
           <button type="button" id="manualAdd" class="px btn small">+</button>
         </div>
         <div id="emoPicker" class="emo-picker hidden"></div>
 
-        <div class="bullet-title"><i></i>Скорость</div>
+        <div class="bullet-title"><i></i><span data-i18n="secLimits"></span><span class="count" data-i18n="zeroNoLimit"></span></div>
         <div class="row">
-          <label class="field">После лайка, мс<input name="likeDelay" type="number" min="500" step="100"></label>
-          <label class="field">После коммента, мс<input name="commentDelay" type="number" min="1000" step="100"></label>
-        </div>
-        <div class="row">
-          <label class="field">Макс. постов<input name="maxPosts" type="number" min="1"></label>
-          <label class="field">Макс. скроллов<input name="maxScrolls" type="number" min="0"></label>
+          <label class="field"><span data-i18n="likesPerDay"></span><input name="dailyLikes" type="number" min="0"></label>
+          <label class="field"><span data-i18n="commentsPerDay"></span><input name="dailyComments" type="number" min="0"></label>
         </div>
 
-        <div class="bullet-title"><i></i>Антиспам Steam</div>
-        <label class="field">Когда Steam дал лимит
+        <div class="bullet-title"><i></i><span data-i18n="secSchedule"></span></div>
+        <label class="check"><input type="checkbox" name="quietEnabled"><span class="box"></span><span data-i18n="quietHours"></span></label>
+        <div class="row">
+          <label class="field"><span data-i18n="from"></span><input name="quietFrom" type="time"></label>
+          <label class="field"><span data-i18n="to"></span><input name="quietTo" type="time"></label>
+        </div>
+        <label class="check"><input type="checkbox" name="autoRun"><span class="box"></span><span data-i18n="autoRun"></span></label>
+        <div class="row">
+          <label class="field"><span data-i18n="everyHours"></span><input name="autoRunHours" type="number" min="1" max="48"></label>
+          <div class="muted small-note" data-i18n="autoRunHint"></div>
+        </div>
+        <label class="check"><input type="checkbox" name="notify"><span class="box"></span><span data-i18n="notify"></span></label>
+
+        <div class="bullet-title"><i></i><span data-i18n="secSpeed"></span></div>
+        <div class="row">
+          <label class="field"><span data-i18n="afterLike"></span><input name="likeDelay" type="number" min="500" step="100"></label>
+          <label class="field"><span data-i18n="afterComment"></span><input name="commentDelay" type="number" min="1000" step="100"></label>
+        </div>
+        <div class="row">
+          <label class="field"><span data-i18n="maxPosts"></span><input name="maxPosts" type="number" min="1"></label>
+          <label class="field"><span data-i18n="maxScrolls"></span><input name="maxScrolls" type="number" min="0"></label>
+        </div>
+
+        <div class="bullet-title"><i></i><span data-i18n="secAntispam"></span></div>
+        <label class="field"><span data-i18n="whenLimit"></span>
           <select name="onLimit">
-            <option value="stop">Остановить всё</option>
-            <option value="likesOnly">Продолжать только лайки</option>
+            <option value="stop" data-i18n="limitStop"></option>
+            <option value="likesOnly" data-i18n="limitLikes"></option>
           </select>
         </label>
-        <label class="field">Кулдаун после лимита, мин<input name="cooldownMin" type="number" min="1"></label>
+        <label class="field"><span data-i18n="cooldownMin"></span><input name="cooldownMin" type="number" min="1"></label>
+
+        <div class="bullet-title"><i></i><span data-i18n="secInterface"></span></div>
+        <label class="field"><span data-i18n="language"></span>
+          <select name="lang">
+            <option value="auto" data-i18n="langAuto"></option>
+            <option value="en">English</option>
+            <option value="ru">Русский</option>
+          </select>
+        </label>
+        <div class="muted small-note" data-i18n="hotkeyManage"></div>
 
         <div class="actions">
-          <button type="submit" class="px btn primary">Сохранить</button>
-          <button type="button" id="clearHistory" class="px btn">Очистить историю</button>
+          <button type="submit" class="px btn primary" data-i18n="save"></button>
         </div>
+
+        <div class="bullet-title"><i></i><span data-i18n="secData"></span></div>
+        <div class="actions three">
+          <button type="button" id="exportBtn" class="px btn" data-i18n="exportBtn"></button>
+          <button type="button" id="importBtn" class="px btn" data-i18n="importBtn"></button>
+          <button type="button" id="clearHistory" class="px btn" data-i18n="clearHistory"></button>
+        </div>
+        <input type="file" id="importFile" accept="application/json,.json" class="hidden">
         <div id="formMsg" class="muted"></div>
       </form>
     </div>
 
-    <!-- ЛОГ -->
+    <!-- ================= STATS ================= -->
+    <div class="view hidden" data-view="stats">
+      <section class="px block">
+        <div class="bullet-title"><i></i><span data-i18n="today"></span></div>
+        <div class="cards two">
+          <div class="px card"><div id="sToday0" class="dots"></div><b data-i18n="cardLikes"></b><span id="sToday0Lim" class="muted lim"></span></div>
+          <div class="px card"><div id="sToday1" class="dots"></div><b data-i18n="cardComments"></b><span id="sToday1Lim" class="muted lim"></span></div>
+        </div>
+      </section>
+
+      <section class="px block">
+        <div class="bullet-title"><i></i><span data-i18n="last14"></span>
+          <span class="count legend"><i class="lg lg-c"></i><span data-i18n="legendComments"></span><i class="lg lg-l"></i><span data-i18n="legendLikes"></span></span></div>
+        <div id="chart" class="chart"></div>
+        <div id="chartAxis" class="chart-axis muted"></div>
+        <div id="allTime" class="muted"></div>
+      </section>
+
+      <section class="px block">
+        <div class="bullet-title"><i></i><span data-i18n="topFriends"></span></div>
+        <div id="topFriends" class="top"></div>
+      </section>
+
+      <div class="actions">
+        <button type="button" id="resetStats" class="px btn" data-i18n="resetStats"></button>
+      </div>
+      <div id="statsMsg" class="muted"></div>
+    </div>
+
+    <!-- ================= LOG ================= -->
     <div class="view hidden" data-view="log">
       <section class="px block">
-        <div class="bullet-title"><i></i>Лог</div>
+        <div class="bullet-title"><i></i><span data-i18n="logTitle"></span></div>
         <pre id="log" class="log"></pre>
       </section>
     </div>
   </div>
 
+  <script src="lib/core.js"></script>
+  <script src="lib/strings.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

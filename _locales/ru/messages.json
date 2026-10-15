@@ -1,0 +1,6 @@
+{
+  "extName": { "message": "Steam Autolike" },
+  "extDescription": { "message": "Лайкает посты друзей в ленте Steam и оставляет один комментарий-смайлик на пост — без повторов, с дневными лимитами и уважением к антиспаму Steam." },
+  "cmdToggle": { "message": "Старт / стоп на текущей вкладке Steam" },
+  "actionTitle": { "message": "Steam Autolike" }
+}

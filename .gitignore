@@ -1,6 +1,7 @@
 *.xpi
 *.zip
 node_modules/
+dist/
 web-ext-artifacts/
 .DS_Store
 __pycache__/

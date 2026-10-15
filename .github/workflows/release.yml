@@ -1,0 +1,54 @@
+name: Release
+
+# Push a tag like v2.0.0 → tests, lint, build, (optional) AMO signing, GitHub Release with the .xpi.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+      AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run lint
+
+      - name: Check that the tag matches manifest.json
+        run: |
+          v=$(node -p "require('./manifest.json').version")
+          [ "v$v" = "$GITHUB_REF_NAME" ] || { echo "Tag $GITHUB_REF_NAME != manifest version $v"; exit 1; }
+
+      - name: Build unsigned .xpi
+        run: npm run build
+
+      # Optional: add AMO_JWT_ISSUER / AMO_JWT_SECRET repository secrets
+      # (addons.mozilla.org → Developer Hub → Manage API Keys) to get a signed build
+      # that installs permanently in regular Firefox.
+      - name: Sign on AMO (unlisted)
+        if: env.AMO_JWT_ISSUER != ''
+        run: |
+          npx web-ext sign --source-dir . --channel unlisted --artifacts-dir dist-signed \
+            --api-key "$AMO_JWT_ISSUER" --api-secret "$AMO_JWT_SECRET" --approval-timeout 900000
+          for f in dist-signed/*.xpi; do mv "$f" "dist/steam-autolike-${GITHUB_REF_NAME#v}-signed.xpi"; done
+
+      - name: Release notes from CHANGELOG.md
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          awk -v v="$v" '$0 ~ "^## \\[?"v"\\]?" {on=1; next} /^## / && on {exit} on' CHANGELOG.md > notes.md
+          [ -s notes.md ] || echo "Steam Autolike $GITHUB_REF_NAME" > notes.md
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/*.xpi --title "Steam Autolike $GITHUB_REF_NAME" --notes-file notes.md
