@@ -1,5 +1,5 @@
 const DEFAULTS = {
-  emoji: ":CVRChanHeart:", emojiPool: [":CVRChanHeart:"], perComment: 1, doLike: true, doComment: true,
+  emoji: ":steamhappy:", emojiPool: [":steamhappy:"], perComment: 1, doLike: true, doComment: true,
   likeDelay: 2500, commentDelay: 7000, maxPosts: 200, maxScrolls: 30,
   onLimit: "stop", cooldownMin: 30
 };

@@ -3,8 +3,8 @@
   window.__steamAutolike = true;
 
   const DEFAULTS = {
-    emoji: ":CVRChanHeart:",        // запасной, если пул пуст
-    emojiPool: [":CVRChanHeart:"],  // из пула берутся случайные смайлики
+    emoji: ":steamhappy:",          // запасной, если пул пуст (есть у всех)
+    emojiPool: [":steamhappy:"],    // из пула берутся случайные смайлики
     perComment: 1,                  // сколько смайликов в одном комменте
     doLike: true,
     doComment: true,
@@ -57,6 +57,7 @@
   let consecutiveErrors = 0;
   let pendingResult = null;
   let processed = new Set();
+  let commentedThreads = new Set(); // ветки, где мы точно оставили коммент
   let me = null;
 
   const state = {
@@ -163,8 +164,10 @@
 
   // ---------- Обработанные посты ----------
   async function loadProcessed() {
-    const { processed: arr = [] } = await browser.storage.local.get("processed");
+    const { processed: arr = [], commentedThreads: ct = [] } =
+      await browser.storage.local.get(["processed", "commentedThreads"]);
     processed = new Set(arr);
+    commentedThreads = new Set(ct);
   }
   async function markProcessed(key) {
     if (!key) return;
@@ -207,14 +210,140 @@
     return false;
   }
 
-  // Проверка на странице самого поста — фоном через fetch, без перехода
+  // ---------- Ветка комментариев целиком (все страницы) ----------
+  // Steam хранит параметры ветки в g_rgCommentThreads[key] и в вызове
+  // InitializeCommentThread("Тип", "key", {owner, feature, feature2, total_count…}, "https://…/comment/Тип/").
+  // Все комменты отдаёт POST …/comment/<Тип>/render/<owner>/<feature>/ с start/count.
+
+  const RENDER_PAGE = 100;   // комментов за запрос
+  const RENDER_MAX_PAGES = 60;
+
+  function threadKeyIn(root) {
+    const el = root.querySelector(
+      '[id^="commentthread_"][id$="_area"], [id^="commentthread_"][id$="_posts"], ' +
+      '[id^="commentthread_"][id$="_textarea"], [id^="commentthread_"][id$="_postcontainer"]'
+    );
+    const m = el?.id.match(/^commentthread_(.+)_(area|posts|textarea|postcontainer)$/);
+    return m ? m[1] : null;
+  }
+
+  function escRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+
+  function threadFromGlobal(key) {
+    try {
+      const t = (window.wrappedJSObject || window).g_rgCommentThreads?.[key];
+      const d = t?.m_rgCommentData;
+      if (!t || !d) return null;
+      return {
+        url: String(t.m_strActionURL || ""),
+        owner: d.owner != null ? String(d.owner) : null,
+        feature: d.feature != null ? String(d.feature) : null,
+        feature2: d.feature2 != null ? String(d.feature2) : null,
+        extended: d.extended_data != null ? String(d.extended_data) : null,
+        total: Number(t.m_cTotalCount ?? d.total_count) || 0
+      };
+    } catch (_) { return null; }
+  }
+
+  function threadFromHtml(key, html) {
+    if (!html) return null;
+    const re = new RegExp(
+      `InitializeCommentThread\\(\\s*["'][^"']*["']\\s*,\\s*["']${escRe(key)}["']\\s*,\\s*(\\{[\\s\\S]*?\\})\\s*,\\s*["']([^"']+)["']`
+    );
+    const m = html.match(re);
+    if (!m) return null;
+    try {
+      const d = JSON.parse(m[1]);
+      return {
+        url: m[2],
+        owner: d.owner != null ? String(d.owner) : null,
+        feature: d.feature != null ? String(d.feature) : null,
+        feature2: d.feature2 != null ? String(d.feature2) : null,
+        extended: d.extended_data != null ? String(d.extended_data) : null,
+        total: Number(d.total_count) || 0
+      };
+    } catch (_) { return null; }
+  }
+
+  // Запасной вариант: ключ вида Тип_<owner>_<feature>, у профиля — Тип_<owner>
+  function threadFromKey(key) {
+    const parts = key.split("_");
+    const i = parts.findIndex((p) => /^\d{10,}$/.test(p));
+    if (i < 1) return null;
+    const type = parts.slice(0, i).join("_");
+    return {
+      url: `https://steamcommunity.com/comment/${type}/`,
+      owner: parts[i],
+      feature: parts.length > i + 1 ? parts.slice(i + 1).join("_") : "-1",
+      feature2: null, extended: null, total: 0
+    };
+  }
+
+  function getThread(root, html) {
+    const key = threadKeyIn(root);
+    if (!key) return null;
+    const t = threadFromGlobal(key) || threadFromHtml(key, html ?? root.innerHTML) || threadFromKey(key);
+    if (!t || !t.url || !t.owner || t.feature == null) return null;
+    if (!t.url.endsWith("/")) t.url += "/";
+    return { key, ...t };
+  }
+
+  function getSessionId() {
+    try {
+      const s = (window.wrappedJSObject || window).g_sessionID;
+      if (s) return String(s);
+    } catch (_) {}
+    return document.cookie.match(/(?:^|;\s*)sessionid=([^;]+)/)?.[1] || null;
+  }
+
+  // true/false — есть ли мой коммент во всей ветке; null — проверить не удалось
+  async function scanThread(t) {
+    const sessionid = getSessionId();
+    if (!sessionid) return null;
+    const endpoint = `${t.url}render/${t.owner}/${t.feature}/`;
+    let start = 0, total = Infinity, seen = 0;
+
+    for (let page = 0; page < RENDER_MAX_PAGES && start < total; page++) {
+      const body = new URLSearchParams({ start, count: RENDER_PAGE, sessionid });
+      if (t.feature2 != null) body.set("feature2", t.feature2);
+      if (t.extended) body.set("extended_data", t.extended);
+      let j;
+      try {
+        const r = await pageFetch(endpoint, { method: "POST", body, credentials: "include" });
+        if (!r.ok) return null;
+        j = await r.json();
+      } catch (e) {
+        if (e === STOP) throw e;
+        return null;
+      }
+      if (!j || !j.success) return null;
+
+      total = Number(j.total_count) || 0;
+      const doc = new DOMParser().parseFromString(j.comments_html || "", "text/html");
+      const got = doc.querySelectorAll(".commentthread_comment").length;
+      if (hasMyComment(doc)) return true;
+      seen += got;
+      if (!got) break;
+      start += got;
+      if (start < total) await wait(jitter(500));
+    }
+    if (start < total) return null; // не дочитали — лучше пропустить пост
+    if (total > 6) log(`Проверено ${seen}/${total} комментов, моего нет`);
+    return false;
+  }
+
+  // Проверка по странице самого поста — фоном через fetch, без перехода
   async function checkRemote(url) {
     try {
       const r = await pageFetch(url, { credentials: "include" });
       if (!r.ok) return null;
-      const doc = new DOMParser().parseFromString(await r.text(), "text/html");
-      await wait(800);
-      return hasMyComment(doc);
+      const html = await r.text();
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      if (hasMyComment(doc)) return true;
+      const t = getThread(doc, html);
+      if (t) return await scanThread(t);
+      // ветку не нашли — верим странице только если на ней нет пагинации
+      return doc.querySelector('[id$="_pagecontrols"]:not([style*="none"]), [id$="_pagebtn_next"]') ? null : false;
     } catch (e) {
       if (e === STOP) throw e;
       return null;
@@ -233,22 +362,36 @@
   async function fullCheck(post, key) {
     if (hasMyComment(post)) return true;
 
+    // 0) Свой журнал: на этой ветке мы уже оставляли коммент
+    const tKey = threadKeyIn(post);
+    if (tKey && commentedThreads.has(tKey)) return true;
+
+    // 1) Основной путь: выгружаем ВСЕ страницы ветки через API Steam
+    const t = getThread(post);
+    if (t) {
+      const visible = post.querySelectorAll(".commentthread_comment").length;
+      if (t.total && visible >= t.total) return false; // и так всё видно
+      const res = await scanThread(t);
+      if (res !== null) return res;
+      log("API комментов не ответил — пробую страницу поста");
+    }
+
+    // 2) Запасной: страница поста фоном (и её ветка — тоже целиком)
     const btn = post.querySelector(
       ".blotter_viewallcomments_container a, .blotter_viewallcomments a, a.blotter_viewallcomments, " +
       ".commentthread_showmore a, a.commentthread_expand"
     );
-    if (!btn) return false; // все комменты уже видны на ленте
+    const url = (btn && isNavLink(btn) ? btn.href : null) || getPostPageUrl(post);
+    if (url) return await checkRemote(url);
 
-    // Кнопка «показать все» может уводить на страницу поста — не кликаем,
-    // а смотрим комменты на ней фоном.
-    const url = isNavLink(btn) ? btn.href : getPostPageUrl(post);
-    if (url) {
-      log("Проверяю все комменты фоном");
-      return await checkRemote(url);
+    // 3) Ни API, ни страницы: уверены только если признаков других страниц нет
+    if (btn) {
+      await safeClick(btn, "показать все комменты", key);
+      await wait(settings.expandWait);
+      if (hasMyComment(post)) return true;
     }
-    await safeClick(btn, "показать все комменты", key);
-    await wait(settings.expandWait);
-    return hasMyComment(post);
+    const paged = post.querySelector('[id$="_pagebtn_next"], [id$="_pagelinks"] a, .commentthread_paging a');
+    return paged || btn ? null : false;
   }
 
   function waitCommentResult(timeout) {
@@ -270,6 +413,14 @@
       state.message = "Steam включил антиспам — дальше только лайки";
     }
     browser.storage.local.set({ cooldownUntil: Date.now() + settings.cooldownMin * 60000, lastLimitError: error || "" });
+  }
+
+  async function rememberComment(post) {
+    const k = threadKeyIn(post);
+    if (!k) return;
+    commentedThreads.add(k);
+    const arr = [...commentedThreads].slice(-10000);
+    await browser.storage.local.set({ commentedThreads: arr });
   }
 
   async function postComment(post, key) {
@@ -298,7 +449,7 @@
         log(`Ошибка: ${t}`);
         return "error";
       }
-      if (hasMyComment(post)) { state.commented++; log("💬 Коммент (подтверждён по странице)"); return "ok"; }
+      if (hasMyComment(post)) { state.commented++; await rememberComment(post); log("💬 Коммент (подтверждён по странице)"); return "ok"; }
       log("Steam не ответил на комментарий");
       return "error";
     }
@@ -306,6 +457,7 @@
     if (r.ok) {
       consecutiveErrors = 0;
       state.commented++;
+      await rememberComment(post);
       log(`💬 Коммент (${state.commented}): ${commentText}`);
       await wait(jitter(settings.commentDelay));
       return "ok";

@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Steam Friend Autolike",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Лайкает посты друзей в ленте Steam и оставляет один комментарий на пост. Останавливается, когда Steam включает антиспам-лимит.",
   "browser_specific_settings": {
     "gecko": {
